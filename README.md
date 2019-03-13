@@ -9,11 +9,13 @@ Anywhere任我行——新一代互联网辅助连接框架
 
 
 core.Dial 返回conn conn负责通信
+
 Write:
 '''
 payload := "commander request."
 nBytes, err := conn.Write([]byte(payload))
 '''
+
 Read:
 '''
 response := make([]byte, 1024)
