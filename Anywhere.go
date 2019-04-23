@@ -58,6 +58,43 @@ import (
 )
 var peer_lists []string
 
+func dial_user(host host.Host,target string){
+	maddr, err := multiaddr.NewMultiaddr(target)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// Extract the peer ID from the multiaddr.
+	info, err := peerstore.InfoFromP2pAddr(maddr)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// Add the destination's peer multiaddress in the peerstore.
+	// This will be used during connection and stream creation by libp2p.
+	host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
+
+	// Start a stream with the destination.
+	// Multiaddress of the destination peer is fetched from the peerstore using 'peerId'.
+
+	/**********************************************************************/
+	s, err := host.NewStream(context.Background(), info.ID, "/chat/1.0.0")
+	if err != nil {
+		panic(err)
+	}
+
+	// Create a buffered stream so that read and writes are non blocking.
+	rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
+
+	// Create a thread to read and write data.
+	go writeData(rw)
+	go readData(rw)
+
+	// Hang forever.
+	select {}
+
+}
+
 func convertPeers(peers []string) []pstore.PeerInfo {
 	pinfos := make([]pstore.PeerInfo, len(peers))
 	for i, peer := range peers {
@@ -74,7 +111,6 @@ func convertPeers(peers []string) []pstore.PeerInfo {
 func readpeers() {
 	var current_locate string
 	current_locate,_ = os.Getwd()
-	println(current_locate+"/peers.txt")
 	inputFile, inputError := os.Open(current_locate+"/peers.txt")
 	if inputError != nil {
 		fmt.Printf("An error occurred on opening the inputfile\n")
@@ -218,8 +254,11 @@ func handleStream(s net.Stream) {
 	// Create a buffer stream for non blocking read and write.
 	rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
 
-	go readData(rw)
+	// Create a thread to read and write data.
 	go writeData(rw)
+	go readData(rw)
+
+
 	/**********************************************************************/
 	// stream 's' will stay open until you close it (or the other side closes it).
 }
@@ -262,7 +301,7 @@ func main() {
 	// Parse options from the command line
 	listenF := flag.Int("l", 0, "wait for incoming connections")
 	target := flag.String("d", "", "target peer to dht")
-
+	global_peer := flag.Bool("global",false,"use to connect global peer")
 	flag.Parse()
 
 	if *listenF == 0 {
@@ -275,8 +314,10 @@ func main() {
 	if *target != "" {
 		peer_lists = append(peer_lists,*target)
 		}
-	readpeers()
-	println("ok")
+	if *global_peer{
+		readpeers()
+	}
+
 	bootstrapPeers = convertPeers(peer_lists)
 
 	// 0.0.0.0 will listen on any interface device.
@@ -288,31 +329,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
+	host.SetStreamHandler("/chat/1.0.0", handleStream)
 	if *target == "" {
-		// Set a function as stream handler.
-		// This function is called when a peer connects, and starts a stream with this protocol.
-		// Only applies on the receiving side.
-		host.SetStreamHandler("/chat/1.0.0", handleStream)
 
-		// Let's get the actual TCP port from our listen multiaddr, in case we're using 0 (default; random available port).
-		var port string
-		for _, la := range host.Network().ListenAddresses() {
-			if p, err := la.ValueForProtocol(multiaddr.P_TCP); err == nil {
-				port = p
-				break
-			}
-		}
-
-		if port == "" {
-			panic("was not able to find actual local port")
-		}
-
-
-		fmt.Println("You can replace 127.0.0.1 with public IP as well.")
-		fmt.Printf("\nWaiting for incoming connection\n\n")
-
-		// Hang forever
 		<-make(chan struct{})
 	} else {
 		fmt.Println("This node's multiaddresses:")
