@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package anywhere_go.common.proto;
+option go_package = "proto";
+
+enum Type {
+    Hello = 0;
+    CantFind = 1;
+    OK = 2;
+    PassWay = 3;
+    ConnectClosed = 4;
+    ConnectionFrom = 5;
+    Ping = 6;
+    CantConnectSocks = 7;
+    WantToConnection = 8;
+}
+
+message Pkg {
+    string From = 1;
+    string To = 2;
+    Type Type = 3;
+    bytes Data = 4;
+}
+
+message Msg {
+    int32 Chan = 1;
+    bytes Data = 2;
+    bool close = 3;
+    string From = 4;
+}
