@@ -31,6 +31,20 @@ type mid struct {
 	BeStop       bool
 }
 
+func SafeClose(ch chan struct{}) (justClosed bool) {
+	defer func() {
+		if recover() != nil {
+			// 返回值可以被修改
+			// 在一个延时函数的调用中。
+			justClosed = false
+		}
+	}()
+
+	// 假设这里 ch != nil 。
+	close(ch)   // 如果 ch 已经被关闭将会引发 panic
+	return true // <=> justClosed = true; return
+}
+
 func initMid(c net.Conn) mid {
 	m := mid{
 		DataToWrite: make(chan []byte),
@@ -44,7 +58,7 @@ func initMid(c net.Conn) mid {
 			_, err := c.Write(buf)
 			if err != nil {
 				if !m.BeStop{
-					close(m.Stop)
+					SafeClose(m.Stop)
 				}
 			}
 		}
@@ -195,18 +209,18 @@ func handler(c net.Conn, OK chan p.Type) {
 				if l, ok := nowConnection[pkg.From]; ok {
 					for _, ws := range l {
 						if !ws.Ws.BeStop {
-							close(ws.Ws.Stop)
+							SafeClose(ws.Ws.Stop)
 						}
 					}
 					delete(portList, pkg.From)
 				} else if l, ok := portList[pkg.From]; ok {
 					for _, ws := range l {
 						if !ws.Ws.BeStop {
-							close(ws.Ws.Stop)
+							SafeClose(ws.Ws.Stop)
 						}
 					}
 					delete(portList, pkg.From)
-					close(portStop[pkg.From].stop)
+					SafeClose(portStop[pkg.From].stop)
 				}
 			}()
 			break
@@ -235,7 +249,7 @@ func handler(c net.Conn, OK chan p.Type) {
 				if l, ok := (*aims)[pkg.From][msg.Chan]; ok {
 					if msg.Close {
 						if !l.Ws.BeStop {
-							close(l.Ws.Stop)
+							SafeClose(l.Ws.Stop)
 						}
 						return
 					}
@@ -363,7 +377,7 @@ Please enter the label > `, hostName)
 			if i, ok := nowConnection[removeHostName]; ok {
 				for _, ws := range i {
 					if !ws.Ws.BeStop {
-						close(ws.Ws.Stop)
+						SafeClose(ws.Ws.Stop)
 					}
 				}
 				pkgToSend := &p.Pkg{
@@ -389,7 +403,7 @@ Please enter the label > `, hostName)
 			if i, ok := portList[removeHostName]; ok {
 				for _, ws := range i {
 					if !ws.Ws.BeStop {
-						close(ws.Ws.Stop)
+						SafeClose(ws.Ws.Stop)
 					}
 				}
 				pkgToSend := &p.Pkg{
@@ -401,7 +415,7 @@ Please enter the label > `, hostName)
 				b,_:= pkgToSend.Marshal()
 				_,_ = conn.Write(b)
 				delete(portList, removeHostName)
-				close(portStop[removeHostName].stop)
+				SafeClose(portStop[removeHostName].stop)
 				fmt.Println("Close success.")
 			}
 			continue
